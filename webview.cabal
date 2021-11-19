@@ -2,26 +2,45 @@ cabal-version:      3.0
 name:               webview
 version:            0.0.0.0
 synopsis:           Haskell bindings for webview
-
 homepage:           https://github.com/shun-shobon/webview_haskell#readme
-
 license:            MIT
 license-file:       LICENSE
 author:             Shuntaro Nishizawa
 maintainer:         me@shun.technology
-
 category:           Graphics
 extra-source-files: CHANGELOG.md
 
 library
-    exposed-modules:  Graphics.WebView
-    build-depends:    base ^>=4.14.3.0
-    hs-source-dirs:   src
-    default-language: Haskell2010
+  exposed-modules:  Graphics.WebView
+  build-depends:    base ^>=4.14.3.0
+  hs-source-dirs:   src
+  default-language: Haskell2010
+  cxx-sources:      deps/webview.cpp
+  include-dirs:     deps/webview
+  extra-libraries:  stdc++
+
+  if os(linux)
+    pkgconfig-depends: gtk+-3.0 -any, webkit2gtk-4.0 -any
+
+  if os(osx)
+    cxx-options: -std=c++11
+    frameworks:  WebKit
+
+  if os(windows)
+    cxx-options:     -mwindows
+    extra-libraries:
+      webview
+      WebView2Loader
+
+    if arch(x86_64)
+      extra-lib-dirs: deps/webview/dll/x64
+
+    if arch(i386)
+      extra-lib-dirs: deps/webview/dll/x86
 
 test-suite webview-test
-    default-language: Haskell2010
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   test
-    main-is:          Test.hs
-    build-depends:    base ^>=4.14.3.0
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Test.hs
+  build-depends:    base ^>=4.14.3.0
