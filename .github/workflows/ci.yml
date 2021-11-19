@@ -1,0 +1,41 @@
+name: ci
+on:
+  push:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: '8.10.7'
+
+      - name: Cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.cabal
+          key: cabal-${{ runner.os }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          restore-keys: cabal-${{ runner.os }}-
+
+      - if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update -y
+          sudo apt install -y libwebkit2gtk-4.0-dev
+
+      - name: Install dependencies
+        run: |
+          cabal update
+          cabal build --only-dependencies
+
+      - name: Build
+        run: cabal build all
