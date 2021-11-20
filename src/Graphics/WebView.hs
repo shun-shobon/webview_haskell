@@ -5,6 +5,8 @@ module Graphics.WebView
   , title
   , size
   , navigate
+  , initJS
+  , evalJS
   , bind
   , ResizeHint(..)
   ) where
@@ -23,6 +25,8 @@ foreign import ccall "webview_run" c_webview_run :: Ptr () -> IO ()
 foreign import ccall "webview_set_title" c_webview_set_title :: Ptr () -> CString -> IO ()
 foreign import ccall "webview_set_size" c_webview_set_size :: Ptr () -> CInt -> CInt -> CInt -> IO ()
 foreign import ccall "webview_navigate" c_webview_navigate :: Ptr () -> CString -> IO ()
+foreign import ccall "webview_init" c_webview_init :: Ptr () -> CString -> IO ()
+foreign import ccall "webview_eval" c_webview_eval :: Ptr () -> CString -> IO ()
 foreign import ccall "webview_bind" c_webview_bind :: Ptr () -> CString -> FunPtr (CString -> CString -> Ptr () -> IO ()) -> Ptr () -> IO ()
 foreign import ccall "webview_return" c_webview_return :: Ptr () -> CString -> CInt -> CString -> IO ()
 foreign import ccall "wrapper" mkBindCallback :: (CString -> CString -> Ptr () -> IO ()) -> IO (FunPtr (CString -> CString -> Ptr () -> IO ()))
@@ -58,6 +62,16 @@ navigate :: String -> WebViewM ()
 navigate url = do
   (WebView w) <- ask
   liftIO . withCString url . c_webview_navigate $ w
+
+initJS :: String -> WebViewM ()
+initJS code = do
+  (WebView w) <- ask
+  liftIO . withCString code . c_webview_init $ w
+
+evalJS :: String -> WebViewM ()
+evalJS code = do
+  (WebView w) <- ask
+  liftIO . withCString code . c_webview_eval $ w
 
 bind :: String -> (String -> IO (Either String String)) -> WebViewM ()
 bind name callback = do
