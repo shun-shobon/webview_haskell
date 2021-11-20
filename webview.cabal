@@ -40,12 +40,3 @@ library
 
     if arch(i386)
       extra-lib-dirs: deps/webview/dll/x86
-
-test-suite webview-test
-  default-language: Haskell2010
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   test
-  main-is:          Test.hs
-  build-depends:
-    , base     ^>=4.14.3.0
-    , webview
