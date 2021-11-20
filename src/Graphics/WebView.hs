@@ -16,6 +16,7 @@ import           Control.Monad.Reader           ( ReaderT
                                                 , liftIO
                                                 , runReaderT
                                                 )
+import qualified Data.Text                     as T
 import           Foreign.C
 import           Foreign.Ptr
 
@@ -43,10 +44,10 @@ runWebView isDebug m = do
   c_webview_run w
   c_webview_destroy w
 
-title :: String -> WebViewM ()
+title :: T.Text -> WebViewM ()
 title title = do
   (WebView w) <- ask
-  liftIO . withCString title . c_webview_set_title $ w
+  liftIO . withCString (T.unpack title) . c_webview_set_title $ w
 
 data ResizeHint = ResizeNone | ResizeMin | ResizeMax | ResizeFix deriving (Enum)
 
@@ -58,30 +59,31 @@ size width height hint = do
                               (fromIntegral height)
                               (fromIntegral . fromEnum $ hint)
 
-navigate :: String -> WebViewM ()
+navigate :: T.Text -> WebViewM ()
 navigate url = do
   (WebView w) <- ask
-  liftIO . withCString url . c_webview_navigate $ w
+  liftIO . withCString (T.unpack url) $ c_webview_navigate w
 
-initJS :: String -> WebViewM ()
+initJS :: T.Text -> WebViewM ()
 initJS code = do
   (WebView w) <- ask
-  liftIO . withCString code . c_webview_init $ w
+  liftIO . withCString (T.unpack code) $ c_webview_init w
 
-evalJS :: String -> WebViewM ()
+evalJS :: T.Text -> WebViewM ()
 evalJS code = do
   (WebView w) <- ask
-  liftIO . withCString code . c_webview_eval $ w
+  liftIO . withCString (T.unpack code) $ c_webview_eval w
 
-bind :: String -> (String -> IO (Either String String)) -> WebViewM ()
+bind :: T.Text -> (T.Text -> IO (Either T.Text T.Text)) -> WebViewM ()
 bind name callback = do
   (WebView w) <- ask
   callback'   <- liftIO . mkBindCallback $ \seq req _ -> do
-    req' <- peekCString req
+    req' <- T.pack <$> peekCString req
     res  <- callback req'
     case res of
       Left err -> do
-        withCString err $ c_webview_return w seq 1
+        withCString (T.unpack err) $ c_webview_return w seq 1
       Right res' -> do
-        withCString res' $ c_webview_return w seq 0
-  liftIO . withCString name $ \name' -> c_webview_bind w name' callback' nullPtr
+        withCString (T.unpack res') $ c_webview_return w seq 0
+  liftIO . withCString (T.unpack name) $ \name' ->
+    c_webview_bind w name' callback' nullPtr

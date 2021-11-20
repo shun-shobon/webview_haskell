@@ -1,9 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import           Control.Monad.Reader           ( ask
                                                 , liftIO
                                                 , runReaderT
                                                 )
+import qualified Data.Text                     as T
 import           Graphics.WebView
 
 main :: IO ()
@@ -16,5 +19,5 @@ main = do
     initJS "console.log('Hello, WebView!')"
     bind "print" $ \s -> do
       runReaderT (evalJS "console.log('printed!')") w
-      putStrLn s
+      putStrLn . T.unpack $ s
       pure . Right $ "\"print done.\""
