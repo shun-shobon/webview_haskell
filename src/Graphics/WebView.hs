@@ -11,10 +11,16 @@ module Graphics.WebView
   , ResizeHint(..)
   ) where
 
+import           Control.Concurrent             ( forkIO )
 import           Control.Monad.Reader           ( ReaderT
-                                                , ask
+                                                , asks
                                                 , liftIO
                                                 , runReaderT
+                                                )
+import           Data.IORef                     ( IORef
+                                                , atomicModifyIORef
+                                                , newIORef
+                                                , readIORef
                                                 )
 import qualified Data.Text                     as T
 import           Foreign.C
@@ -28,62 +34,71 @@ foreign import ccall "webview_set_size" c_webview_set_size :: Ptr () -> CInt -> 
 foreign import ccall "webview_navigate" c_webview_navigate :: Ptr () -> CString -> IO ()
 foreign import ccall "webview_init" c_webview_init :: Ptr () -> CString -> IO ()
 foreign import ccall "webview_eval" c_webview_eval :: Ptr () -> CString -> IO ()
-foreign import ccall "webview_bind" c_webview_bind :: Ptr () -> CString -> FunPtr (CString -> CString -> Ptr () -> IO ()) -> Ptr () -> IO ()
+
+type Callback = CString -> CString -> Ptr () -> IO ()
+foreign import ccall "webview_bind" c_webview_bind :: Ptr () -> CString -> FunPtr Callback -> Ptr () -> IO ()
 foreign import ccall "webview_return" c_webview_return :: Ptr () -> CString -> CInt -> CString -> IO ()
-foreign import ccall "wrapper" mkBindCallback :: (CString -> CString -> Ptr () -> IO ()) -> IO (FunPtr (CString -> CString -> Ptr () -> IO ()))
+foreign import ccall "wrapper" mkBindCallback :: Callback -> IO (FunPtr Callback)
 
 
-newtype WebView = WebView (Ptr ())
+data WebView = WebView
+  { webViewPtr      :: Ptr ()
+  , webViewBindings :: IORef [FunPtr Callback]
+  }
 
 type WebViewM = ReaderT WebView IO
 
 runWebView :: Bool -> WebViewM () -> IO ()
 runWebView isDebug m = do
-  w <- c_webview_create (fromIntegral . fromEnum $ isDebug) nullPtr
-  runReaderT m (WebView w)
-  c_webview_run w
-  c_webview_destroy w
+  ptr      <- c_webview_create (fromIntegral . fromEnum $ isDebug) nullPtr
+  bindings <- newIORef []
+  runReaderT m (WebView ptr bindings)
+  c_webview_run ptr
+  c_webview_destroy ptr
+  readIORef bindings >>= mapM_ freeHaskellFunPtr
 
 title :: T.Text -> WebViewM ()
-title title = do
-  (WebView w) <- ask
-  liftIO . withCString (T.unpack title) . c_webview_set_title $ w
+title title =
+  asks webViewPtr
+    >>= liftIO
+    .   withCString (T.unpack title)
+    .   c_webview_set_title
 
 data ResizeHint = ResizeNone | ResizeMin | ResizeMax | ResizeFix deriving (Enum)
 
 size :: Int -> Int -> ResizeHint -> WebViewM ()
 size width height hint = do
-  (WebView w) <- ask
-  liftIO $ c_webview_set_size w
+  ptr <- asks webViewPtr
+  liftIO $ c_webview_set_size ptr
                               (fromIntegral width)
                               (fromIntegral height)
                               (fromIntegral . fromEnum $ hint)
 
 navigate :: T.Text -> WebViewM ()
-navigate url = do
-  (WebView w) <- ask
-  liftIO . withCString (T.unpack url) $ c_webview_navigate w
+navigate url =
+  asks webViewPtr >>= liftIO . withCString (T.unpack url) . c_webview_navigate
 
 initJS :: T.Text -> WebViewM ()
-initJS code = do
-  (WebView w) <- ask
-  liftIO . withCString (T.unpack code) $ c_webview_init w
+initJS code =
+  asks webViewPtr >>= liftIO . withCString (T.unpack code) . c_webview_init
 
 evalJS :: T.Text -> WebViewM ()
-evalJS code = do
-  (WebView w) <- ask
-  liftIO . withCString (T.unpack code) $ c_webview_eval w
+evalJS code =
+  asks webViewPtr >>= liftIO . withCString (T.unpack code) . c_webview_eval
 
 bind :: T.Text -> (T.Text -> IO (Either T.Text T.Text)) -> WebViewM ()
 bind name callback = do
-  (WebView w) <- ask
-  callback'   <- liftIO . mkBindCallback $ \seq req _ -> do
+  ptr       <- asks webViewPtr
+  bindings  <- asks webViewBindings
+  callback' <- liftIO . mkBindCallback $ \seq req _ -> do
     req' <- T.pack <$> peekCString req
     res  <- callback req'
     case res of
       Left err -> do
-        withCString (T.unpack err) $ c_webview_return w seq 1
+        withCString (T.unpack err) $ c_webview_return ptr seq 1
       Right res' -> do
-        withCString (T.unpack res') $ c_webview_return w seq 0
+        withCString (T.unpack res') $ c_webview_return ptr seq 0
   liftIO . withCString (T.unpack name) $ \name' ->
-    c_webview_bind w name' callback' nullPtr
+    c_webview_bind ptr name' callback' nullPtr
+  liftIO . atomicModifyIORef bindings $ \bindings' ->
+    (callback' : bindings', ())
