@@ -3,12 +3,14 @@ module Graphics.WebView
   , WebViewM
   , runWebView
   , title
+  , Size(..)
   , size
+  , sizeMin
+  , sizeMax
   , navigate
   , initJS
   , evalJS
   , bind
-  , ResizeHint(..)
   ) where
 
 import           Control.Concurrent             ( forkIO )
@@ -64,15 +66,28 @@ title title =
     .   withCString (T.unpack title)
     .   c_webview_set_title
 
-data ResizeHint = ResizeNone | ResizeMin | ResizeMax | ResizeFix deriving (Enum)
+data Size = Size
+  { sizeWidth  :: Int
+  , sizeHeight :: Int
+  }
 
-size :: Int -> Int -> ResizeHint -> WebViewM ()
-size width height hint = do
+
+size :: Size -> Bool -> WebViewM ()
+size (Size width height) resizable = do
   ptr <- asks webViewPtr
-  liftIO $ c_webview_set_size ptr
-                              (fromIntegral width)
-                              (fromIntegral height)
-                              (fromIntegral . fromEnum $ hint)
+  let hint = if resizable then 0 else 3
+  liftIO
+    $ c_webview_set_size ptr (fromIntegral width) (fromIntegral height) hint
+
+sizeMin :: Size -> WebViewM ()
+sizeMin (Size width height) = do
+  ptr <- asks webViewPtr
+  liftIO $ c_webview_set_size ptr (fromIntegral width) (fromIntegral height) 1
+
+sizeMax :: Size -> WebViewM ()
+sizeMax (Size width height) = do
+  ptr <- asks webViewPtr
+  liftIO $ c_webview_set_size ptr (fromIntegral width) (fromIntegral height) 2
 
 navigate :: T.Text -> WebViewM ()
 navigate url =

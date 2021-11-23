@@ -14,7 +14,7 @@ main = do
   runWebView True $ do
     w <- ask
     title "example"
-    size 480 320 ResizeNone
+    size (Size 480 320) True
     navigate "https://haskell.org"
     initJS "console.log('Hello, WebView!')"
     bind "print" $ \s -> do
