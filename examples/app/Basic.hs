@@ -2,12 +2,13 @@
 
 module Main where
 
-import           Control.Monad.Reader           ( ask
-                                                , liftIO
-                                                , runReaderT
-                                                )
-import qualified Data.Text                     as T
-import           Graphics.WebView
+import Control.Monad.Reader
+  ( ask,
+    liftIO,
+    runReaderT,
+  )
+import qualified Data.Text as T
+import Graphics.WebView
 
 main :: IO ()
 main = do
